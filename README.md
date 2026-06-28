@@ -1,209 +1,92 @@
-# Telegram MCP Client Bot
+# Telegram Bot (LLM + MCP)
 
-A Spring Boot-based Telegram bot that integrates with a Large Language Model (LLM) and uses Model Context Protocol (MCP) client features to enable AI-native processing of chat updates.
+A Spring Boot Telegram bot powered by an LLM via Spring AI, with Model Context Protocol (MCP) client support so the assistant can call external tools.
 
-This README follows the structure of the provided template while being tailored to this project.
+## Overview
 
-## 🚀 Features
+This bot listens for Telegram updates over long polling, forwards user messages to an Anthropic (Claude) chat model through Spring AI, and replies in the chat. It maintains per-chat conversation memory, enforces per-user rate limiting, and connects to one or more MCP servers as a client — exposing their tools to the model so it can fulfil requests that require external actions (for example, querying a trading API).
 
-- **Telegram Integration**: Receives Telegram updates and sends responses using the Telegram Bot API
-- **LLM Integration**: Responses powered by a configurable LLM (Anthropic/OpenAI-style) via `LlmService`
-- **MCP Client Support**: Configured MCP client for streamable HTTP and tool callbacks
-- **Chat Context Management**: In-memory chat context with configurable max messages and TTL
-- **Rate Limiting**: Per-minute request rate limiting to prevent abuse
-- **Config-Driven**: All behavior is configurable via `application.yml` and environment variables
-- **Extensible Handlers & Services**: Clear separation between handlers, services, config, DTOs, and utilities
+## Features
 
-## 📋 Prerequisites
+- **Telegram integration** — receives and responds to messages using Telegram long polling
+- **LLM responses** — chat powered by Anthropic (Claude) via Spring AI's `ChatClient`
+- **MCP client** — connects to MCP servers over streamable HTTP and registers their tools as callable tools for the model
+- **Per-chat memory** — conversation history kept per chat with configurable max messages and TTL-based eviction
+- **Rate limiting** — per-user request limiting (Bucket4j)
+- **Message chunking & Markdown** — long replies are split into Telegram-sized chunks, with Markdown formatting and a plain-text fallback
+- **Bot commands** — `/start`, `/clear` (reset conversation history), and `/tools` (list available MCP tools)
 
-- Java 21 (project compiled with Java 21)
+## Tech Stack
+
+- Java 21
+- Spring Boot 3.5.10
+- Spring AI 1.1.2 (Anthropic chat model + MCP client starter)
+- Telegram Bots 7.11.0 (longpolling + client)
+- Bucket4j (rate limiting)
+- Caffeine (chat-memory TTL eviction)
+- Lombok
 - Gradle (wrapper included)
-- Telegram bot token (from BotFather)
-- LLM provider API key (if using LLM features)
 
-## 🛠️ Technology Stack
+## Getting Started
 
-- **Framework**: Spring Boot
-- **AI Integration**: Spring AI / custom LLM integration classes
-- **Build Tool**: Gradle (wrapper included)
-- **HTTP Client**: Spring WebClient / RestTemplate (as used by services)
-- **In-Memory Context**: Custom chat context configuration
-- **Caching**: Optional caching hooks in configuration
+### Prerequisites
 
-## ⚙️ Configuration
+- Java 21
+- A Telegram bot token (from [@BotFather](https://t.me/BotFather))
+- An Anthropic API key
+- (Optional) A running MCP server to connect to
 
-### Environment Variables
-
-Set the following environment variables (bash/zsh):
+### Build
 
 ```bash
-# Telegram
-export TELEGRAM_BOT_TOKEN="<your-telegram-token>"
-export TELEGRAM_BOT_USERNAME="<your-bot-username>"
-
-# LLM (Anthropic example)
-export ANTHROPIC_API_KEY="<your-anthropic-api-key>"
-
-# MCP server URL (if using remote MCP service)
-export MCP_SERVER_URL="http://localhost:8082/"
+./gradlew build
 ```
 
-### `application.yml` (key excerpts)
-
-This project is configured with sensible defaults in `src/main/resources/application.yml`. Relevant sections:
-
-```yaml
-spring:
-  application:
-    name: telegram-bot
-  ai:
-    anthropic:
-      api-key: ${ANTHROPIC_API_KEY:your-api-key-here}
-      chat:
-        options:
-          model: claude-sonnet-4-5-20250929
-          max-tokens: 4096
-          temperature: 0.7
-    mcp:
-      client:
-        name: telegram-bot-mcp-client
-        version: 1.0.0
-        toolcallback:
-          enabled: true
-        streamable-http:
-          connections:
-            server1:
-              url: ${MCP_SERVER_URL:http://localhost:8082/}
-
-telegram:
-  bot:
-    token: ${TELEGRAM_BOT_TOKEN:your-bot-token-here}
-    username: ${TELEGRAM_BOT_USERNAME:your-bot-username}
-
-chat:
-  context:
-    max-messages: 50
-    ttl-minutes: 30
-
-rate-limit:
-  requests-per-minute: 20
-
-server:
-  port: 8083
-```
-
-Adjust values as needed for your environment.
-
-## 🗂️ Project structure
-
-Actual repository layout (top-level + important files):
-
-```
-telegram-bot/
-├── build.gradle
-├── gradlew
-├── settings.gradle
-├── LICENSE
-├── README.md
-└── src/
-    ├── main/
-    │   ├── java/com/navneet/telegrambot/
-    │   │   ├── TelegramBotApplication.java
-    │   │   ├── config/
-    │   │   │   ├── ChatMemoryConfig.java
-    │   │   │   ├── LlmConfig.java
-    │   │   │   ├── RateLimitConfig.java
-    │   │   │   └── TelegramBotConfig.java
-    │   │   ├── handler/
-    │   │   │   └── TelegramUpdateHandler.java
-    │   │   ├── service/
-    │   │   │   └── LlmService.java
-    │   │   ├── dto/
-    │   │   │   └── ChatMessage.java
-    │   │   └── util/
-    │   │       └── TelegramResponseUtil.java
-    │   └── resources/
-    │       └── application.yml
-    └── test/
-        └── java/com/navneet/telegrambot/
-```
-
-## 🤖 MCP Client Architecture
-
-This project acts as an MCP *client* and can connect to MCP servers for tool invocations and streamable communication. Key points:
-
-- **MCP Client**: Configured via `spring.ai.mcp.client` properties in `application.yml`
-- **Tool Callbacks**: Tool callback support (`toolcallback.enabled`) allows the bot to register and receive tool invocations
-- **Streamable HTTP**: Streamable HTTP connections configured to communicate with MCP servers
-
-## 📚 Domain Models
-
-Key data models in the codebase:
-
-- `ChatMessage` — represents messages in a chat with optional metadata
-- `LlmService` request/response models — used when calling the configured LLM
-- Rate limit and chat-context configuration objects
-
-## 🧪 Testing
-
-Run unit tests with Gradle:
-
-```bash
-./gradlew test
-```
-
-For integration tests that require external services (Telegram, LLM), mock external HTTP calls or run tests with a test profile that uses local mocks.
-
-## 📦 Build & Run
-
-Build the project:
-
-```bash
-./gradlew clean build
-```
-
-Run with Gradle wrapper:
+### Run
 
 ```bash
 ./gradlew bootRun
 ```
 
-Or run the produced JAR (adjust name if different):
+The application starts on port `8083` by default and begins polling Telegram.
+
+## Configuration
+
+Configuration lives in `src/main/resources/application.yml` and reads from environment variables. Set the following (use your own values):
 
 ```bash
-java -jar build/libs/telegram-bot-0.0.1-SNAPSHOT.jar
+export TELEGRAM_BOT_TOKEN=<your-telegram-bot-token>
+export TELEGRAM_BOT_USERNAME=<your-bot-username>
+export ANTHROPIC_API_KEY=<your-anthropic-api-key>
+export MCP_SERVER_URL=<your-mcp-server-url>   # e.g. http://localhost:8082/
 ```
 
-The server listens on the port configured in `application.yml` (default 8083).
+Key configuration properties:
 
-## 🔒 Security & Secrets
+| Property | Description |
+|----------|-------------|
+| `spring.ai.anthropic.api-key` | Anthropic API key (`ANTHROPIC_API_KEY`) |
+| `spring.ai.anthropic.chat.options.model` | Claude model id |
+| `spring.ai.mcp.client.streamable-http.connections.*.url` | MCP server URL (`MCP_SERVER_URL`) |
+| `telegram.bot.token` | Telegram bot token (`TELEGRAM_BOT_TOKEN`) |
+| `telegram.bot.username` | Telegram bot username (`TELEGRAM_BOT_USERNAME`) |
+| `chat.context.max-messages` | Max messages retained per chat |
+| `chat.context.ttl-minutes` | Conversation TTL in minutes |
+| `rate-limit.requests-per-minute` | Per-user request limit |
+| `server.port` | HTTP port (default `8083`) |
 
-- Keep API keys and tokens out of source control. Use environment variables or a secrets manager.
-- For production, secure the application with appropriate network and application-level protections.
+## Project Structure
 
-## 👤 Author
+```
+src/main/java/com/navneet/telegrambot/
+├── TelegramBotApplication.java
+├── config/   # LLM/ChatClient, chat memory, rate limit, and Telegram bot configuration
+├── handler/  # Telegram update handler (commands, rate limiting, dispatch)
+├── service/  # LlmService — chat, history, and tool integration
+├── dto/      # ChatMessage model
+└── util/     # Telegram response formatting helpers
+```
 
-Navneet Prabhakar
+## Disclaimer
 
-GitHub: https://github.com/navneetprabhakar
-
-Email: navneet@example.com  <!-- replace or remove if you prefer not to publish an email -->
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/awesome`) 
-3. Commit your changes (`git commit -m "Add awesome feature"`)
-4. Push and open a Pull Request
-
-## 📞 Support
-
-Open an issue on the repository for bugs or feature requests.
-
-## 📝 License
-
-See the `LICENSE` file at the repository root for license details.
-
----
-
-*This README is based on the Trade MCP Server template and adapted for the Telegram LLM/MCP client bot in this repository.*
+This project is for educational and personal use. Keep API keys and bot tokens out of source control.
